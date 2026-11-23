@@ -2,14 +2,17 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { runBilling, fetchInvoices } from '../api/billing'
+import { ApiError } from '../api/client'
 
-function currentMonth() {
+// Only completed months can be billed, so default to last month.
+function previousMonth() {
   const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
 }
 
 export default function Billing() {
-  const [month, setMonth] = useState(currentMonth)
+  const [month, setMonth] = useState(previousMonth)
   const [runResult, setRunResult] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
 
@@ -22,13 +25,14 @@ export default function Billing() {
     mutationFn: () => runBilling(month),
     onSuccess: (data) => {
       setRunResult(
-        `Billing run complete — ${data.invoices_generated} invoice(s) generated.`
+        `Billing run complete — ${data.invoices_generated} invoice(s) generated, ${data.invoices_existing} already existed.`
       )
       setRunError(null)
       invoicesQuery.refetch()
     },
-    onError: () => {
-      setRunError('Billing run failed. Please try again.')
+    onError: (error) => {
+      const message = error instanceof ApiError ? (error.data.month ?? error.data.detail) : undefined
+      setRunError(message ? String(message) : 'Billing run failed. Please try again.')
       setRunResult(null)
     },
   })
